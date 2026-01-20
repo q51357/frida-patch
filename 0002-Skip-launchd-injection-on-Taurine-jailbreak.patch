@@ -1,0 +1,37 @@
+From: Frida Patcher <patch@frida.re>
+Date: Thu, 26 Dec 2025 12:00:00 +0000
+Subject: [PATCH 2/4] Skip launchd injection on Taurine jailbreak
+
+Taurine-based jailbreaks (Chimera/Odyssey/Taurine) do not permit hooking
+launchd (PID 1), and attempts to do so can cause kernel panics. This patch
+adds a check to skip injection into launchd.
+
+---
+ .../frida-core/src/darwin/darwin-host-session.vala  | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/subprojects/frida-core/src/darwin/darwin-host-session.vala b/subprojects/frida-core/src/darwin/darwin-host-session.vala
+index 1234567..abcdefg 100644
+--- a/subprojects/frida-core/src/darwin/darwin-host-session.vala
++++ b/subprojects/frida-core/src/darwin/darwin-host-session.vala
+@@ -306,6 +306,18 @@ namespace Frida {
+
+ 		private async uint inject_agent (uint pid, string agent_parameters, Cancellable? cancellable) throws Error, IOError {
+ 			uint id;
++
++#if IOS || TVOS
++			/*
++			 * PATCH: Skip launchd (PID 1) injection on iOS.
++			 * Taurine-based jailbreaks do not permit hooking launchd, and attempts
++			 * to do so can cause kernel panics and system reboots.
++			 */
++			if (pid == 1) {
++				throw new Error.NOT_SUPPORTED (
++					"Injection into launchd is not supported on this jailbreak");
++			}
++#endif
+
+ 			unowned string entrypoint = "frida_agent_main";
+ #if HAVE_EMBEDDED_ASSETS
+--
+2.39.0

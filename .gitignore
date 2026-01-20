@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor artifacts
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Backup files
+*.bak
+*.orig
+
+# Temporary files
+*.tmp

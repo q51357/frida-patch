@@ -1,0 +1,66 @@
+From: Frida Patcher <patch@frida.re>
+Date: Thu, 26 Dec 2025 12:00:00 +0000
+Subject: [PATCH 3/4] Add Taurine jailbreak detection
+
+Adds runtime detection for Taurine-based jailbreaks by checking for libhooker
+and Taurine-specific files. This can be used to enable compatibility workarounds.
+
+---
+ .../backend-darwin/gumprocess-darwin.c        | 42 +++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+diff --git a/subprojects/frida-gum/gum/backend-darwin/gumprocess-darwin.c b/subprojects/frida-gum/gum/backend-darwin/gumprocess-darwin.c
+index 1234567..abcdefg 100644
+--- a/subprojects/frida-gum/gum/backend-darwin/gumprocess-darwin.c
++++ b/subprojects/frida-gum/gum/backend-darwin/gumprocess-darwin.c
+@@ -148,6 +148,48 @@ static gboolean gum_collect_range_of_potential_images (
+     const GumRangeDetails * details, gpointer user_data);
+ static void gum_sort_images_by_index (gpointer a, gpointer b, gpointer data);
+
++/*
++ * PATCH: Taurine jailbreak detection.
++ * Detects Taurine/Odyssey/Chimera jailbreaks which use libhooker instead of
++ * Cydia Substrate. These jailbreaks have different restrictions that can
++ * trigger kernel panics with standard Frida operations.
++ */
++static gboolean
++gum_is_taurine_jailbreak (void)
++{
++#if defined (HAVE_IOS) || defined (HAVE_TVOS)
++  static gsize cached_result = 0;
++
++  if (g_once_init_enter (&cached_result))
++  {
++    gboolean is_taurine = FALSE;
++    void * libhooker;
++
++    /* Check for libhooker (Taurine's hooking library) */
++    libhooker = dlopen ("/usr/lib/libhooker.dylib", RTLD_NOLOAD | RTLD_LAZY);
++    if (libhooker != NULL)
++    {
++      is_taurine = TRUE;
++      dlclose (libhooker);
++    }
++
++    /* Check for Taurine-specific files */
++    if (!is_taurine)
++    {
++      is_taurine = g_file_test ("/Library/dpkg/info/com.odysseyteam.taurine.list",
++          G_FILE_TEST_EXISTS) ||
++        g_file_test ("/odyssey/jailbreakd.plist", G_FILE_TEST_EXISTS);
++    }
++
++    g_once_init_leave (&cached_result, is_taurine ? 2 : 1);
++  }
++
++  return cached_result == 2;
++#else
++  return FALSE;
++#endif
++}
++
+ GumPageSize
+ gum_darwin_query_page_size (void)
+ {
+--
+2.39.0

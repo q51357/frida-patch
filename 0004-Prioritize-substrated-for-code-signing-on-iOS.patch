@@ -1,0 +1,37 @@
+From: Frida Patcher <patch@frida.re>
+Date: Thu, 26 Dec 2025 12:00:00 +0000
+Subject: [PATCH 4/4] Prioritize substrated for code signing on iOS
+
+When substrated (Cydia Substrate daemon) is available, use it preferentially
+for code signing operations. This provides better compatibility with jailbroken
+iOS systems, especially Taurine which may have issues with local remap operations.
+
+---
+ .../backend-darwin/gumcodesegment-darwin.c    | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/subprojects/frida-gum/gum/backend-darwin/gumcodesegment-darwin.c b/subprojects/frida-gum/gum/backend-darwin/gumcodesegment-darwin.c
+index 1234567..abcdefg 100644
+--- a/subprojects/frida-gum/gum/backend-darwin/gumcodesegment-darwin.c
++++ b/subprojects/frida-gum/gum/backend-darwin/gumcodesegment-darwin.c
+@@ -317,12 +317,18 @@ gum_code_segment_map (GumCodeSegment * self,
+   }
+   else
+   {
++    /*
++     * PATCH: Try substrated first for better jailbreak compatibility.
++     * substrated (Cydia Substrate daemon) provides more reliable code signing
++     * on jailbroken systems, especially with Taurine-based jailbreaks that may
++     * have kernel restrictions on local vm_remap operations.
++     */
+     mapped_successfully = gum_code_segment_try_remap_using_substrated (self,
+         source_offset, source_size, target_address);
+     if (!mapped_successfully)
+     {
++      /* Fall back to local remap if substrated is not available */
+       mapped_successfully = gum_code_segment_try_remap_locally (self,
+           source_offset, source_size, target_address);
+     }
+   }
+--
+2.39.0

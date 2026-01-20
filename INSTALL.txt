@@ -1,0 +1,112 @@
+INSTALLATION INSTRUCTIONS FOR FRIDA iOS 14.7.1 + TAURINE PATCHES
+================================================================
+
+QUICK START (Recommended)
+-------------------------
+
+1. Clone Frida to a new directory:
+   cd /Users/username/git
+   git clone https://github.com/frida/frida.git frida-ios14-patched
+   cd frida-ios14-patched
+
+2. Checkout Frida 17.5.2:
+   git checkout 17.5.2
+
+3. Apply the patches:
+   /Users/username/git/frida-patch/apply-patches.sh
+
+4. Set your code signing certificate:
+   export IOS_CERTID="Apple Development: your@email.com (XXXXXXXXXX)"
+   
+   To find your certificate:
+   security find-identity -v -p codesigning
+
+5. Build for iOS:
+   ./configure --host=ios-arm64
+   make
+
+6. Install (creates binaries in build/ directory):
+   make install
+
+
+MANUAL PATCH APPLICATION (If script fails)
+-------------------------------------------
+
+If the apply-patches.sh script fails, apply manually:
+
+cd /path/to/frida
+git checkout 17.5.2
+
+patch -p1 < /Users/username/git/frida-patch/0001-Disable-thread-suspension-on-iOS-14-for-Taurine-compat.patch
+patch -p1 < /Users/username/git/frida-patch/0002-Skip-launchd-injection-on-Taurine-jailbreak.patch
+patch -p1 < /Users/username/git/frida-patch/0003-Add-Taurine-jailbreak-detection.patch
+patch -p1 < /Users/username/git/frida-patch/0004-Prioritize-substrated-for-code-signing-on-iOS.patch
+
+
+DEPLOYING TO iOS DEVICE
+------------------------
+
+After building, deploy to your jailbroken iOS device:
+
+1. Copy frida-server:
+   scp build/frida-ios-arm64/bin/frida-server root@YOUR-DEVICE-IP:/usr/sbin/
+
+2. Set permissions:
+   ssh root@YOUR-DEVICE-IP 'chmod +x /usr/sbin/frida-server'
+
+3. Start frida-server on device:
+   ssh root@YOUR-DEVICE-IP
+   frida-server &
+
+4. Test from your Mac:
+   frida-ps -H YOUR-DEVICE-IP
+
+
+TESTING
+-------
+
+If the patches worked, these commands should NOT cause a reboot:
+
+- frida-ps -H YOUR-DEVICE-IP
+- frida -H YOUR-DEVICE-IP -n SpringBoard
+- frida -Ua (if connected via USB)
+
+
+TROUBLESHOOTING
+---------------
+
+Device still reboots:
+- Verify patches applied: git log --oneline | head -5
+- Check you're using the patched frida-server
+- Try disabling other jailbreak tweaks
+
+Build errors:
+- Install Xcode Command Line Tools: xcode-select --install
+- Check certificate: security find-identity -v -p codesigning
+- Try arm64e for A12+: ./configure --host=ios-arm64e
+
+Patches don't apply:
+- Ensure you're on Frida 17.5.2: git checkout 17.5.2
+- Check for clean working directory: git status
+- Try 3-way merge: git am --3way *.patch
+
+
+ALTERNATIVE VERSIONS (No patching needed)
+------------------------------------------
+
+If patching fails, try these versions that work with Taurine:
+
+Option 1 - Frida 16.0.2:
+  pip install frida-tools==11.0.0
+  pip install frida==16.0.2
+
+Option 2 - Frida 15.1.8:
+  pip install frida-tools==10.8.0
+  pip install frida==15.1.8
+
+
+SUPPORT
+-------
+
+For issues: https://github.com/frida/frida/issues
+Include: iOS version, jailbreak type, Frida version, error logs
