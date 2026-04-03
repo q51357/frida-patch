@@ -43,4 +43,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frida-server-taurine-17.5.2
-          path: frida/build/frida-ios-arm64/bin/frida-server
+          path: frida/build/**/frida-server
