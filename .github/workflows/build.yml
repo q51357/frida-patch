@@ -1,0 +1,46 @@
+name: Build Patched Frida for Taurine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Frida 17.5.2
+        uses: actions/checkout@v4
+        with:
+          repository: frida/frida
+          ref: 17.5.2
+          submodules: recursive
+          path: frida
+
+      - name: Checkout jwalker patches
+        uses: actions/checkout@v4
+        with:
+          repository: jwalker/frida-patch
+          path: frida-patch
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Apply Taurine Patches
+        run: |
+          cd frida
+          bash ../frida-patch/apply-edits-directly.sh
+        
+      - name: Configure and Build iOS frida-server
+        run: |
+          cd frida
+          # 使用 ad-hoc 伪签名，避免需要苹果开发者证书
+          export IOS_CERTID="-"
+          ./configure --host=ios-arm64
+          make core-ios-arm64
+          
+      - name: Upload frida-server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frida-server-taurine-17.5.2
+          path: frida/build/frida-ios-arm64/bin/frida-server
