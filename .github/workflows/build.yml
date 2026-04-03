@@ -37,7 +37,7 @@ jobs:
           # 使用 ad-hoc 伪签名，避免需要苹果开发者证书
           export IOS_CERTID="-"
           ./configure --host=ios-arm64
-          make core-ios-arm64
+          make
           
       - name: Upload frida-server artifact
         uses: actions/upload-artifact@v4
