@@ -17,7 +17,7 @@ jobs:
         run: |
           VER="${{ github.event.inputs.frida_version }}"
           if [ -z "$VER" ]; then
-            VER=$(curl -s https://api.github.com/repos/frida/frida/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+            VER=$(git ls-remote --tags --sort=-v:refname https://github.com/frida/frida.git | head -n1 | sed 's/.*refs\/tags\///')
           fi
           echo "FRIDA_VERSION=$VER" >> $GITHUB_OUTPUT
           echo "Building Frida $VER"
