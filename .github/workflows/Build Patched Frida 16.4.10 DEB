@@ -1,0 +1,66 @@
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Frida 16.4.10
+        uses: actions/checkout@v4
+        with:
+          repository: frida/frida
+          ref: 16.4.10
+          submodules: recursive
+          path: frida
+
+      - name: Checkout jwalker patches
+        uses: actions/checkout@v4
+        with:
+          repository: jwalker/frida-patch
+          path: frida-patch
+
+      - name: Install dependencies
+        run: brew install dpkg wget
+
+      - name: Apply Taurine Patches
+        run: |
+          cd frida
+          bash ../frida-patch/apply-edits-directly.sh
+        
+      - name: Configure and Build
+        run: |
+          cd frida
+          export IOS_CERTID="-"
+          ./configure --host=ios-arm64
+          make
+          
+      - name: Repack API into official DEB
+        run: |
+          # 1. 下载官方原版 16.4.10 deb 
+          wget https://github.com/frida/frida/releases/download/16.4.10/frida_16.4.10_iphoneos-arm.deb
+          
+          # 2. 解压 deb 包的目录结构
+          dpkg-deb -R frida_16.4.10_iphoneos-arm.deb frida_pkg
+          
+          # 3. 找出原官方包里的所有文件，并逐个替换为我们打完补丁的新编译文件
+          find frida_pkg/usr -type f | while read file; do
+            filename=$(basename "$file")
+            # 在我们的编译产出中寻找同名文件（比如 frida-server, frida-agent.dylib 等）
+            new_file=$(find frida/build -type f -name "$filename" | head -n 1)
+            if [ ! -z "$new_file" ]; then
+              echo "Replacing $filename..."
+              cp -f "$new_file" "$file"
+            fi
+          done
+
+          # 4. 修改 DEBIAN/control 中的版本号名称，防止与官方混淆
+          sed -i '' 's/Version: 16.4.10/Version: 16.4.10-TaurinePatched/g' frida_pkg/DEBIAN/control
+          
+          # 5. 重新打包出最终的 DEB
+          dpkg-deb -b frida_pkg frida-taurine_16.4.10_iphoneos-arm64.deb
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frida-taurine-16.4.10.deb
+          path: frida-taurine_16.4.10_iphoneos-arm64.deb
