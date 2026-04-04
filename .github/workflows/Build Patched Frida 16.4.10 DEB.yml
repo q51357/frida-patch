@@ -1,3 +1,5 @@
+name: Build Patched Frida 16.4.10 DEB
+
 on:
   workflow_dispatch:
 
