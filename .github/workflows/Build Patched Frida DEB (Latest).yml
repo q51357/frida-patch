@@ -1,0 +1,99 @@
+name: Build Patched Frida DEB (Latest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      frida_version:
+        description: 'Frida version to build (leave empty for latest)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Determine Frida version
+        id: version
+        run: |
+          VER="${{ github.event.inputs.frida_version }}"
+          if [ -z "$VER" ]; then
+            VER=$(curl -s https://api.github.com/repos/frida/frida/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+          fi
+          echo "FRIDA_VERSION=$VER" >> $GITHUB_OUTPUT
+          echo "Building Frida $VER"
+
+      - name: Checkout Frida
+        uses: actions/checkout@v4
+        with:
+          repository: frida/frida
+          ref: ${{ steps.version.outputs.FRIDA_VERSION }}
+          submodules: recursive
+          path: frida
+
+      - name: Checkout jwalker patches
+        uses: actions/checkout@v4
+        with:
+          repository: jwalker/frida-patch
+          path: frida-patch
+
+      - name: Install dependencies
+        run: brew install dpkg wget
+
+      - name: Apply Taurine Patches
+        run: |
+          cd frida
+          bash ../frida-patch/apply-edits-directly.sh
+
+      - name: Configure and Build
+        run: |
+          cd frida
+          export IOS_CERTID="-"
+          ./configure --host=ios-arm64
+          make
+
+      - name: List build output (debug)
+        if: always()
+        run: |
+          echo "=== Build output structure ==="
+          find frida/build -name "frida-server" -o -name "frida-agent*" -o -name "*.deb" 2>/dev/null || echo "No matching files"
+          echo "=== Full bin directories ==="
+          find frida/build -type d -name "bin" -exec ls -la {} \; 2>/dev/null || true
+
+      - name: Repack into DEB
+        run: |
+          VER=${{ steps.version.outputs.FRIDA_VERSION }}
+
+          # 下载官方原版 deb 作为模板
+          wget -q "https://github.com/frida/frida/releases/download/${VER}/frida_${VER}_iphoneos-arm.deb" -O official.deb || \
+          wget -q "https://github.com/frida/frida/releases/download/${VER}/frida_${VER}_iphoneos-arm64.deb" -O official.deb
+
+          # 解包
+          dpkg-deb -R official.deb frida_pkg
+
+          # 用编译出的新文件替换旧文件
+          for file in $(find frida_pkg/usr -type f); do
+            fname=$(basename "$file")
+            new=$(find frida/build -type f -name "$fname" | head -n 1)
+            if [ ! -z "$new" ]; then
+              echo "Replacing: $fname"
+              cp -f "$new" "$file"
+            fi
+          done
+
+          # 修改版本号标记
+          sed -i '' "s/Version: ${VER}/Version: ${VER}-TaurinePatched/g" frida_pkg/DEBIAN/control
+
+          # 重新打包
+          dpkg-deb -b frida_pkg "frida-taurine_${VER}_iphoneos-arm64.deb"
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: frida-taurine-${{ steps.version.outputs.FRIDA_VERSION }}-deb
+          path: frida-taurine_*.deb
+
+      - name: Upload frida-server binary (backup)
+        uses: actions/upload-artifact@v4
+        with:
+          name: frida-server-${{ steps.version.outputs.FRIDA_VERSION }}
+          path: frida/build/**/frida-server
